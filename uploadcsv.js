@@ -13,6 +13,8 @@ var mongoose = require('mongoose');
 
 mongoose.connect('mongodb://username:password@ds247330.mlab.com:47330/battles');
 
+var promise = require('promise');
+var url = require('url');
 
 var Battle  = require("./battle.js");
 //mongoose.model('Battle');
@@ -97,7 +99,7 @@ var csvStream = csv()
         } else { 
 
             throw err;
-			res.json({success : "Error", data: docs});
+			res.json({success : "Error"});
         }
 
     });
@@ -115,16 +117,93 @@ var csvStream = csv()
         } else { 
 
             throw err;
-			res.json({success : "Error", data: docs});
+			res.json({success : "Error"});
         }
 
     });
   });
   
-  app.post('/stats',function(req,res){
+  function defendermax(){
+	console.log("defenderMax");
+	return new promise (function(resolve,reject){
+		Battle.aggregate([
+			{$group : {_id:"$defender_king", count:{$sum:1}}},
+			{$sort:{"count":-1}},
+			{$limit:1}
+		],function(err,docs){
+			if (!err){ 
+				
+				resolve(docs);
+
+			} else { 
+
+				throw err;
+				reject ;
+				res.json({success : "Error"});
+			}
+		});
+	});
+  }
   
+  function attackeroutcome(){
+	return new promise(function(resolve,reject){
+		Battle.aggregate([
+			{$group : {_id:"$attacker_outcome", count:{$sum:1}}}
+		],function(err,docs){
+			if (!err){ 
+				
+				resolve(docs);
+
+			} else { 
+
+				throw err;
+				reject ;
+				res.json({success : "Error"});
+			}
+		});
+	});
+  }
+  
+  app.post('/stats',function(req,res){
+	var val = {};
+	var maxoccurrence = {};
+	Battle.aggregate([
+		{$group : {_id:"$attacker_king", count:{$sum:1}}},
+		{$sort:{"count":-1}},
+		{$limit:1}
+	],function(err,docs){
+		if (!err){ 
+			defendermax().then(function(data){
+				attackeroutcome().then(function(attackerdata){
+					res.json({most_active:{attacker_king:docs[0]._id, defenser_king:data[0]._id},attacker_outcome:attackerdata});
+				}).catch(function(err){
+					res.json({success : "Error"});
+				});
+				
+			}).catch(function(err){
+				console.log("Error");
+				console.log(err);
+			});
+
+        } else { 
+
+            throw err;
+			res.json({success : "Error"});
+        }
+	});
   });
   
   app.post('/search',function(req,res){
-  
+	console.log(req.query.king);
+	Battle.find({ $or: [ { attacker_king: req.query.king }, { defender_king: req.query.king }] },function(err, docs){
+		if (!err){ 
+
+            res.json({success : "Fetched Successfully", data: docs});
+
+        } else { 
+
+            throw err;
+			res.json({success : "Error"});
+        }
+	});
   });
